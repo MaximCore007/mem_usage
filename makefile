@@ -1,7 +1,7 @@
 # Имя компилируемого исполняемого файла
 TARGET = mem_usage 
 
-BIN = bin
+BINDIR = ./bin
 
 # Компилятор
 CC = gcc
@@ -20,8 +20,12 @@ SRCS = mem_usage.c
 OBJS = $(SRCS:.c=.o)
 
 # Правило по умолчанию (сборка проекта)
-all: $(TARGET)
-	mv -v $(TARGET) ./$(BIN)/ 
+all: $(TARGET) $(BINDIR)
+	mv -v $(TARGET) $(BINDIR)
+
+#
+$(BINDIR):
+	mkdir -p -v $(BINDIR)
 
 # Правило для сборки исполняемого файла
 $(TARGET): $(OBJS)
@@ -33,7 +37,7 @@ $(TARGET): $(OBJS)
 
 # Правило для очистки сборки
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f -v $(OBJS) $(BINDIR)/*
 
 # Правило для сборки проекта, если Makefile изменился
 .PHONY: all clean

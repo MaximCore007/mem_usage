@@ -2,29 +2,63 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <proc/readproc.h>
 
 #define ARG_MAX_LENGTH 100
+#define FILE_NAME "mem_usage.txt"
 
-static int get_process(char *name)
+struct Mem_usage {
+	unsigned long int curr, min, max;
+};
+
+static int file_write(proc_t *proc_info, struct Mem_usage *mem)
+{
+	/*
+	 * File table:
+	 * Name	| PID | State | MEM use | MEM max | MEM min
+	*/
+	int fd = open("FILE.csv", O_RDWR | O_CREAT, S_IRUSR | S_IRGRP | S_IROTH);
+
+	static int header = 0;
+	if (header == 0) {
+		header = 1;
+		printf("Name\t|\tPID\t|\tState\t|\tMEM use\t|\tMEM max\t|\tMEM min\t|\n");
+	}
+	printf("%s\t|\t%d\t|\t  %c\t|\t%ld\t|\t%ld\t|\t%ld\t|\tKB\n",
+		proc_info->cmd, proc_info->tid, proc_info->state, mem->curr, mem->max, mem->min);
+	if (fd != -1) {
+		close(fd);
+	}
+	return 0;
+}
+
+static int process_handler(char *name, struct Mem_usage *mem)
 {
 	int err = -1;
-	
+
 	PROCTAB *proc = openproc(PROC_FILLMEM | PROC_FILLSTAT | PROC_FILLSTATUS);
-	
 	proc_t proc_info;
 	memset(&proc_info, 0, sizeof(proc_info));
 
-	printf("Name\tPID\tState\tCurr. MEM\n");
 	while (readproc(proc, &proc_info) != NULL) {
 		if (strcmp(proc_info.cmd, name) == 0) {
-			printf("%s\t%d\t%c\t%.2f MB\n",
-				proc_info.cmd, proc_info.tid, proc_info.state, (float)((float)proc_info.resident * 4096.f) / (1024.f * 1000.f));
+			mem->curr = (proc_info.resident * 4096) / 1024;
+			if (mem->curr < mem->min) {
+				mem->min = mem->curr;
+			}
+			if (mem->curr > mem->max) {
+				mem->max = mem->curr;
+			}
 			err = 0;
 			break;
 		}
 		// printf("%d,\t%ld\t", proc_info.ppid, proc_info.resident);
 		// printf("%lld,\t%lld\n", proc_info.utime, proc_info.stime);
+	}
+	
+	if (err == 0) {
+		file_write(&proc_info, mem);
 	}
 
 	return err;
@@ -91,8 +125,11 @@ int main(int argc, char *argv[])
 
 	// printf("Options: -n is %s\t-p is %d\n", name, period);
 	
+	struct Mem_usage mem_usage = {.curr = 0, .max = 0};
+	memset(&mem_usage.min, 0xFF, sizeof(mem_usage.min));
+	
 	while (1) {
-		int ret = get_process(name);
+		int ret = process_handler(name, &mem_usage);
 		if (ret != 0) {
 			return 1;
 		}
