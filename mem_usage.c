@@ -2,11 +2,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <fcntl.h>
 #include <proc/readproc.h>
 
 #define ARG_MAX_LENGTH 100
 #define FILE_NAME "mem_usage.txt"
+#define PATH_TO_FILE "subfolder"//"/proc"
+
+// static const char *table_header =
+// 	"Name\t|\tPID\t|\tState\t|\tMEM use\t|\tMEM max\t|\tMEM min\t|\n";
+
+/*
+ * File table:
+ * Name	| PID | State | MEM use | MEM max | MEM min
+ */
+#define TABLE_HEADER "Name\t|\tPID\t|\tState\t|\tMEM use\t|\tMEM max\t|\tMEM min\t|\n"
+
 
 struct Mem_usage {
 	unsigned long int curr, min, max;
@@ -14,23 +24,33 @@ struct Mem_usage {
 
 static int file_write(proc_t *proc_info, struct Mem_usage *mem)
 {
-	/*
-	 * File table:
-	 * Name	| PID | State | MEM use | MEM max | MEM min
-	*/
-	int fd = open("FILE.csv", O_RDWR | O_CREAT, S_IRUSR | S_IRGRP | S_IROTH);
+	int err = -1;
 
+	char *pathToFile = calloc(sizeof(PATH_TO_FILE) + sizeof(FILE_NAME), sizeof(char));
+	sprintf(pathToFile, "%s/%s", PATH_TO_FILE, FILE_NAME);
+	fprintf(stderr, "Full path name: %s\n", pathToFile);
+
+	FILE *fptr = fopen(pathToFile, "a");
+	
 	static int header = 0;
-	if (header == 0) {
-		header = 1;
-		printf("Name\t|\tPID\t|\tState\t|\tMEM use\t|\tMEM max\t|\tMEM min\t|\n");
+	if (fptr != NULL) {
+		if (header == 0) {
+			header = 1;
+			fprintf(fptr, TABLE_HEADER);
+		}
+		fprintf(fptr, "%s\t|\t%d\t|\t%c\t|\t%ld\t|\t%ld\t|\t%ld\t|\tKB\n",
+			proc_info->cmd, proc_info->tid, proc_info->state, mem->curr, mem->max, mem->min);
+		fclose(fptr);
+
+		err = 0;
 	}
-	printf("%s\t|\t%d\t|\t  %c\t|\t%ld\t|\t%ld\t|\t%ld\t|\tKB\n",
-		proc_info->cmd, proc_info->tid, proc_info->state, mem->curr, mem->max, mem->min);
-	if (fd != -1) {
-		close(fd);
+	else {
+		printf("A file don't created!\n");
 	}
-	return 0;
+
+	free(pathToFile);
+
+	return err;
 }
 
 static int process_handler(char *name, struct Mem_usage *mem)
@@ -53,12 +73,13 @@ static int process_handler(char *name, struct Mem_usage *mem)
 			err = 0;
 			break;
 		}
-		// printf("%d,\t%ld\t", proc_info.ppid, proc_info.resident);
-		// printf("%lld,\t%lld\n", proc_info.utime, proc_info.stime);
 	}
 	
 	if (err == 0) {
-		file_write(&proc_info, mem);
+		err = file_write(&proc_info, mem);
+	}
+	else {
+		printf("%s this process not found!\n", name);
 	}
 
 	return err;
@@ -71,7 +92,7 @@ int main(int argc, char *argv[])
 	int period = 1;
 
 	if(argc == 1) {
-		printf("Add arguments\n");
+		fprintf(stdout, "Use -n NAME - for process search\n\t-p NUMBER - for setting the period, in seconds\n");
 		return 0;
     }
 
@@ -80,51 +101,44 @@ int main(int argc, char *argv[])
 		switch (opt) {
 		case 'n':
 			if (strlen(optarg) >= ARG_MAX_LENGTH) {
-				printf("Maximum name length is 100 symbols\n");
-				return 0;
+				fprintf(stderr, "Maximum name length is 100 symbols\n");
+				return -1;
 			}
 			else {
 				name = optarg;
-				// strcpy(name, optarg);
 			}
 			break;
 		case 'p':
 			period = atoi(optarg);
 			if (period <= 0) {
-				printf("Minimum period = 1\n");
-				return 0;
+				fprintf(stderr, "Minimum value of period equal 1\n");
+				return -1;
 			}
-			// period = atoi(optarg);
 			break;
 		case '?':
 			if (optopt == 'n') {
-				printf("Enter process name\n");
-				// fprintf(stderr,
-				// 	"Enter process name");
+				fprintf(stderr,
+					"Enter process name");
 			}
 			else if (optopt == 'p') {
-				printf("Enter period of polling, in Seconds\n");
-				// fprintf(stderr,
-				// 	"Enter period of polling, in Seconds");
+				fprintf(stderr,
+					"Enter period of polling, in seconds");
 			}
-			// else {
-			// 	fprintf (stderr,
-			// 		"Unknown option\n",
-			// 		optopt);
-			// }
+			else {
+				fprintf (stderr,
+					"Unknown option %c\n",
+					(char)optopt);
+			}
 			return 1;
 			break;
 		case ':':
 			// todo:
 			break;
 		default:
-			// todo:
 			break;
 		}
 	}
 
-	// printf("Options: -n is %s\t-p is %d\n", name, period);
-	
 	struct Mem_usage mem_usage = {.curr = 0, .max = 0};
 	memset(&mem_usage.min, 0xFF, sizeof(mem_usage.min));
 	
