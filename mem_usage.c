@@ -1,15 +1,27 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <proc/readproc.h>
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/proc_fs.h>
+#include <linux/slab.h>
+#include <linux/string.h>
+#include <asm-generic/uaccess.h>
 
-#define ARG_MAX_LENGTH 100
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Maxim");
+MODULE_DESCRIPTION("Program for anlayze memory usage");
+MODULE_VERSION("0.01");
+
+#define ENTRY_NAME "Memory usage"
+#define PERMS 0644
+#define PARENT NULL
+/*
+ * USER DATA BEGIN
+*/
 #define FILE_NAME "mem_usage.txt"
 #define PATH_TO_FILE "subfolder"//"/proc"
 
-// static const char *table_header =
-// 	"Name\t|\tPID\t|\tState\t|\tMEM use\t|\tMEM max\t|\tMEM min\t|\n";
+#define MY_DATA_SIZE 1000U
+static char message[MY_DATA_SIZE];
 
 /*
  * File table:
@@ -17,6 +29,88 @@
  */
 #define TABLE_HEADER "Name\t|\tPID\t|\tState\t|\tMEM use\t|\tMEM max\t|\tMEM min\t|\n"
 
+/*
+ * USER DATA END
+*/
+static struct file_operations myfops = {
+
+};
+
+static int my_open(struct node *sp_inode, struct file *sp_file)
+{
+	strcpy(message, "proc called open!\n");
+	
+	char *message = kzalloc(sizeof(char) * MY_DATA_SIZE, GFP_KERNEL);
+
+	if(message == NULL) {
+		printk("ERROR, don't get memory!\n");
+		return -ENOMEM;
+	}
+
+	strcpy(message, "Hello World!\n");
+
+	return 0;
+}
+
+static ssize_t my_read(struct file *sp_file, char __user *buffer, size_t size, loff_t *offset)
+{
+	printk("proc called raed\n");
+
+	int len = strlen(message);
+
+	read_p = !read_p;
+	if (read_p) {
+		return 0;
+	}
+
+	copy_to_user(buffer, message, len);
+
+	return len;
+}
+
+static ssize_t my_write(struct file* file,const char __user *buffer,size_t count,loff_t *f_pos)
+{
+	printk("proc called write\n");
+
+	return 0;
+}
+
+static int my_close(struct inode *sp_node, struct file *sp_file)
+{
+	printk("proc called release\n");
+	kfree(message);
+
+	return 0;
+}
+
+static int __init mem_usage_init(void)
+{
+	myfops.owner = THIS_MODULE;
+	myfops.open = my_open;
+	myfops.read = my_read;
+	myfops.write = my_write;
+	myfops.release = my_close;
+
+	struct proc_dir_entry *entry;
+	entry = proc_create(ENTRY_NAME, PERMS, NULL, &myfops);
+	if(!entry){
+		printk("ERROR! proc_create");
+		remove_proc_entry(ENTRY_NAME, NULL);
+		return -ENOMEM;	
+	}
+
+	printk(KERN_INFO "/proc/%s file create successfully!\n", ENTRY_NAME);
+	return 0;
+}
+
+static void __exit mem_usage_exit(void)
+{
+	remove_proc_entry(ENTRY_NAME, NULL);
+	printk(KERN_INFO "removing /proc/%s.\n", ENTRY_NAME);
+}
+
+module_init(mem_usage_init);
+module_exit(mem_usage_exit);
 
 struct Mem_usage {
 	unsigned long int curr, min, max;

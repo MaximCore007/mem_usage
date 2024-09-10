@@ -1,43 +1,11 @@
-# Имя компилируемого исполняемого файла
-TARGET = mem_usage 
+obj-m += mem_usage.o
 
-BINDIR = ./bin
+SRCS := $(shell pwd)
 
-# Компилятор
-CC = gcc
+all: modules
 
-# Флаги компиляции
-CFLAGS = -Wall -g
+modules:
+	$(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules
 
-# Библиотеки компиляции
-LIBS := -lprocps
-#INCS := -I/usr/include/proc
-
-# Исходные файлы
-SRCS = mem_usage.c
-
-# Объектные файлы
-OBJS = $(SRCS:.c=.o)
-
-# Правило по умолчанию (сборка проекта)
-all: $(TARGET) $(BINDIR)
-	mv -v $(TARGET) $(BINDIR)
-
-#
-$(BINDIR):
-	mkdir -p -v $(BINDIR)
-
-# Правило для сборки исполняемого файла
-$(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS) ${LIBS}
-
-# Правило для компиляции исходных файлов в объектные файлы
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
-
-# Правило для очистки сборки
 clean:
-	rm -f -v $(OBJS) $(BINDIR)/*
-
-# Правило для сборки проекта, если Makefile изменился
-.PHONY: all clean
+	make -C $(KERNEL_SRC) M=$(SRC) clean
